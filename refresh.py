@@ -32,7 +32,7 @@ with ConfigReader(os.path.join(project_dir, 'settings.ini')) as config:
     DEFAULT_USERNAME = config.get('username')
 
 
-def refresh_dirs_in_path(path):
+def refresh_dirs_in_path(path, branch):
     logger.debug('Checking out path {}'.format(path))
     for p in sorted(os.listdir(path)):
         directory = os.path.join(path, p)
@@ -40,15 +40,20 @@ def refresh_dirs_in_path(path):
         if os.path.isdir(directory):
             g = git.cmd.Git(directory)
             try:
-                g.pull()
+                g.checkout(branch)
+      
             except git.exc.GitCommandError:
                 logger.error(traceback.format_exc())
+
+            else:
+                g.pull()
 
 
 @click.command()
 @click.option('--username', default=DEFAULT_USERNAME, help='Repo username')
+@click.option('--branch', default='master', help='Branch name')
 @click.argument('path')
-def run(username, path):
+def run(username, branch, path):
     path = os.path.abspath(path)
     if not os.path.isdir(path):
         raise Exception('{} does not exist'.format(path))
@@ -60,7 +65,7 @@ def run(username, path):
     os.environ['GIT_USERNAME'] = username
     os.environ['GIT_PASSWORD'] = getpass()
 
-    refresh_dirs_in_path(path)
+    refresh_dirs_in_path(path, branch)
 
 
 if __name__ == "__main__":
