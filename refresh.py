@@ -37,11 +37,12 @@ def refresh_dirs_in_path(path):
     for p in sorted(os.listdir(path)):
         directory = os.path.join(path, p)
 
-        g = git.cmd.Git(directory)
-        try:
-            g.pull()
-        except git.exc.GitCommandError:
-            logger.error(traceback.format_exc())
+        if os.path.isdir(directory):
+            g = git.cmd.Git(directory)
+            try:
+                g.pull()
+            except git.exc.GitCommandError:
+                logger.error(traceback.format_exc())
 
 
 @click.command()

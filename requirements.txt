@@ -1,0 +1,3 @@
+Click==7.0
+GitPython==2.1.11
+pyconfigreader==0.3.3
