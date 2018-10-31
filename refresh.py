@@ -27,7 +27,7 @@ def exception_handler(exc_type, exc_value, exc_traceback):
 sys.excepthook = exception_handler
 
 # Load configuration
-project_dir = os.path.dirname(os.path.abspath(__file__))
+project_dir = os.path.dirname(os.path.realpath(os.path.abspath(__file__)))
 with ConfigReader(os.path.join(project_dir, 'settings.ini')) as config:
     DEFAULT_USERNAME = config.get('username')
 
