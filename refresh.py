@@ -32,40 +32,44 @@ with ConfigReader(os.path.join(project_dir, 'settings.ini')) as config:
     DEFAULT_USERNAME = config.get('username')
 
 
-def refresh_dirs_in_path(path, branch):
-    logger.debug('Checking out path {}'.format(path))
-    for p in sorted(os.listdir(path)):
+@click.command()
+@click.option('--username', '-u', default=DEFAULT_USERNAME, help='Repo username')
+@click.option('--branch', '-b', default='master', help='Branch name')
+@click.option('--password', '-p', default=None, help='Password')
+@click.option('--skip', '-k', default=[], multiple=True, help='Directory names to skip. Can be used multiple times.')
+@click.argument('path')
+def run(username, branch, password, skip, path):
+    """Git pull repositories in a certain directory.
+
+    Useful if you have a couple of git repositories in a certain directory and you would like to bulk pull
+    """
+    path = os.path.abspath(path)
+    if not os.path.isdir(path):
+        raise Exception('Path "{}" does not exist'.format(path))
+
+    if not username:
+        username = os.environ.get('GIT_USERNAME', '')
+        if not username:
+            raise Exception('Invalid username value: {}'.format(username))
+
+    os.environ['GIT_ASKPASS'] = os.path.join(project_dir, 'askpass.py')
+    os.environ['GIT_USERNAME'] = username
+    os.environ['GIT_PASSWORD'] = password or os.environ.get('GIT_PASSWORD', None) or getpass()
+
+    for p in sorted((i for i in os.listdir(path) if not i.startswith('.') and i not in skip)):
         directory = os.path.join(path, p)
+        logger.debug('Checking out path {}'.format(directory))
 
         if os.path.isdir(directory):
             g = git.cmd.Git(directory)
             try:
                 g.checkout(branch)
-      
+
             except git.exc.GitCommandError:
                 logger.error(traceback.format_exc())
 
             else:
                 g.pull()
-
-
-@click.command()
-@click.option('--username', default=DEFAULT_USERNAME, help='Repo username')
-@click.option('--branch', default='master', help='Branch name')
-@click.argument('path')
-def run(username, branch, path):
-    path = os.path.abspath(path)
-    if not os.path.isdir(path):
-        raise Exception('{} does not exist'.format(path))
-
-    if not username:
-        raise Exception('Invalid username value: {}'.format(username))
-
-    os.environ['GIT_ASKPASS'] = os.path.join(project_dir, 'askpass.py')
-    os.environ['GIT_USERNAME'] = username
-    os.environ['GIT_PASSWORD'] = getpass()
-
-    refresh_dirs_in_path(path, branch)
 
 
 if __name__ == "__main__":
