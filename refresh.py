@@ -8,6 +8,7 @@ import logging
 import traceback
 from getpass import getpass
 from pyconfigreader import ConfigReader
+from concurrent.futures import ThreadPoolExecutor
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(levelname)-8s %(message)s',
@@ -30,6 +31,7 @@ sys.excepthook = exception_handler
 project_dir = os.path.dirname(os.path.realpath(os.path.abspath(__file__)))
 with ConfigReader(os.path.join(project_dir, 'settings.ini')) as config:
     DEFAULT_USERNAME = config.get('username')
+    WORKERS = config.get('workers', default='7')
 
 
 @click.command()
@@ -56,20 +58,30 @@ def run(username, branch, password, skip, path):
     os.environ['GIT_USERNAME'] = username
     os.environ['GIT_PASSWORD'] = password or os.environ.get('GIT_PASSWORD', None) or getpass()
 
+    def do_checkout(dir):
+        logger.debug('Path is {}'.format(dir))
+        g = git.cmd.Git(dir)
+        try:
+            g.checkout(branch)
+
+        except Exception:
+            logger.error('Error at {}'.format(dir))
+            logger.error(traceback.format_exc())
+
+        else:
+            g.pull()
+
+    valid_dirs = []
+
     for p in sorted((i for i in os.listdir(path) if not i.startswith('.') and i not in skip)):
         directory = os.path.join(path, p)
         logger.debug('Checking out path {}'.format(directory))
 
         if os.path.isdir(directory):
-            g = git.cmd.Git(directory)
-            try:
-                g.checkout(branch)
+            valid_dirs.append(directory)
 
-            except git.exc.GitCommandError:
-                logger.error(traceback.format_exc())
-
-            else:
-                g.pull()
+    executor = ThreadPoolExecutor(max_workers=WORKERS)
+    executor.map(do_checkout, valid_dirs)
 
 
 if __name__ == "__main__":
