@@ -2,6 +2,8 @@
 
 import os
 import sys
+from pathlib import Path
+
 import click
 import git
 import logging
@@ -45,40 +47,50 @@ def run(username, branch, password, skip, path):
 
     Useful if you have a couple of git repositories in a certain directory and you would like to bulk pull
     """
-    path = os.path.abspath(path)
-    if not os.path.isdir(path):
-        raise Exception('Path "{}" does not exist'.format(path))
+    path = Path(path)
+    if not path.is_dir():
+        click.echo('Path "{}" does not exist'.format(path))
+        sys.exit(1)
 
     if not username:
         username = os.environ.get('GIT_USERNAME', '')
         if not username:
-            raise Exception('Invalid username value: {}'.format(username))
+            click.echo('Invalid username value: {}'.format(username))
+            sys.exit(1)
 
     os.environ['GIT_ASKPASS'] = os.path.join(project_dir, 'askpass.py')
     os.environ['GIT_USERNAME'] = username
     os.environ['GIT_PASSWORD'] = password or os.environ.get('GIT_PASSWORD', None) or getpass()
 
-    def do_checkout(dir):
-        logger.debug('Path is {}'.format(dir))
-        g = git.cmd.Git(dir)
+    def do_checkout(dir_):
+        logger.debug('Checking out path {}'.format(dir_))
+        g = git.cmd.Git(dir_)
         try:
             g.checkout(branch)
 
         except Exception:
-            logger.error('Error at {}'.format(dir))
-            logger.error(traceback.format_exc())
+            logger.error('Error at {}'.format(dir_), exc_info=True)
+            # logger.error(traceback.format_exc())
 
         else:
             g.pull()
 
     valid_dirs = []
+    skips = set()
 
-    for p in sorted((i for i in os.listdir(path) if not i.startswith('.') and i not in skip)):
-        directory = os.path.join(path, p)
-        logger.debug('Checking out path {}'.format(directory))
+    ignore_file = path / '.refreshignore'
+    if ignore_file.is_file():
+        with ignore_file.open() as f:
+            skips = {l.strip() for l in f.readlines()}
 
-        if os.path.isdir(directory):
-            valid_dirs.append(directory)
+    skips = skips | set(skip)
+
+    iterator = (p for p in path.iterdir() if p.is_dir() and p.name[0] != '.' and p.name not in skips)
+    for p in sorted(iterator, key=lambda x: x.name):
+        directory = str(p.absolute())
+        logger.debug('Adding path {}'.format(directory))
+
+        valid_dirs.append(directory)
 
     executor = ThreadPoolExecutor(max_workers=WORKERS)
     executor.map(do_checkout, valid_dirs)
